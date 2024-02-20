@@ -19,6 +19,8 @@ public class HandlerImpl implements Handler {
 
     @Override
     public ApplicationStatusResponse performOperation(String id) {
+        Instant startInstant = Instant.now();
+
         CompletableFuture<Response> first = CompletableFuture.supplyAsync(() -> client.getApplicationStatus1(id));
         CompletableFuture<Response> second = CompletableFuture.supplyAsync(() -> client.getApplicationStatus2(id));
 
@@ -29,21 +31,21 @@ public class HandlerImpl implements Handler {
                     .thenApplyAsync(resp -> (Response) resp)
                     .get(15, TimeUnit.SECONDS);
 
-            statusResponse = this.convert(fastResp);
+            statusResponse = this.convert(fastResp, startInstant);
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
-            statusResponse = this.getFailureResponse();
+            statusResponse = this.getFailureResponse(startInstant);
         }
 
         return statusResponse;
     }
 
-    private ApplicationStatusResponse convert(Response resp) {
+    private ApplicationStatusResponse convert(Response resp, Instant startInstant) {
         ApplicationStatusResponse applicationStatusResponse;
 
         if (resp instanceof Response.Success) {
             applicationStatusResponse = this.convertSuccess((Response.Success) resp);
         } else {
-            applicationStatusResponse = this.getFailureResponse();
+            applicationStatusResponse = this.getFailureResponse(startInstant);
         }
 
         return applicationStatusResponse;
@@ -53,9 +55,9 @@ public class HandlerImpl implements Handler {
         return new ApplicationStatusResponse.Success(resp.applicationId(), resp.applicationStatus());
     }
 
-    private ApplicationStatusResponse getFailureResponse() {
+    private ApplicationStatusResponse getFailureResponse(Instant startInstant) {
         int retriesCount = atomicInteger.incrementAndGet();
-        Duration lastRequestTime = Duration.between(Instant.EPOCH, Instant.now());
+        Duration lastRequestTime = Duration.between(startInstant, Instant.now());
         return new ApplicationStatusResponse.Failure(lastRequestTime, retriesCount);
     }
 }
